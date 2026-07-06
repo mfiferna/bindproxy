@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Terminal.Gui" Version="2.4.16" />
+    <ProjectReference Include="..\BindProxy.Core\BindProxy.Core.csproj" />
+  </ItemGroup>
+</Project>

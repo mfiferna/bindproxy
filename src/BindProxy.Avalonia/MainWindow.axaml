@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="BindProxy.Avalonia.MainWindow"
+        Width="1120"
+        Height="760"
+        MinWidth="920"
+        MinHeight="620"
+        Title="BindProxy">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Top" Spacing="8">
+      <TextBlock Name="SummaryText"
+                 TextWrapping="Wrap"
+                 FontSize="14" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Name="RefreshButton" Content="Refresh" />
+      </StackPanel>
+    </StackPanel>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Name="RowsPanel" Spacing="12" />
+    </ScrollViewer>
+  </DockPanel>
+</Window>
