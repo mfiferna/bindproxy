@@ -1,3 +1,5 @@
+🇬🇧 **English** | [🇨🇿 Čeština](README.cs.md)
+
 > **⚠️ AI disclaimer:** This project was built almost entirely by AI coding agents (Claude Code and GitHub Copilot CLI), with human review and direction. Treat it accordingly — read the code before you trust it with anything sensitive.
 
 # BindProxy
