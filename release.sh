@@ -22,7 +22,9 @@ dotnet publish src/BindProxy.Tui/BindProxy.Tui.csproj -c "$CONFIG" -r "$RID" --s
 find "$OUT/tui" -name '*.pdb' -delete
 
 echo "== Packaging zips =="
-(cd "$OUT/avalonia" && zip -qr "../bindproxy-$VERSION-$RID.zip" .)
+# Avalonia zip has a stable, version-less name so releases/latest/download/ always
+# resolves to the newest build; the version still lives in the release tag/title.
+(cd "$OUT/avalonia" && zip -qr "../bindproxy-$RID.zip" .)
 (cd "$OUT/tui" && zip -qr "../bindproxy-tui-$VERSION-$RID.zip" .)
 
 echo

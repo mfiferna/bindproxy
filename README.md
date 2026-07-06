@@ -10,7 +10,9 @@ BindProxy spins up a local forward proxy pinned to a specific NIC (with matching
 
 ## Get it
 
-Download the latest release from the [Releases page](https://github.com/mfiferna/bindproxy/releases) — grab `bindproxy-*-win-x64.zip` for the desktop app, or `bindproxy-tui-*-win-x64.zip` for the terminal version. Unzip and run the `.exe`, no install needed.
+**[⬇ Download for Windows](https://github.com/mfiferna/bindproxy/releases/latest/download/bindproxy-win-x64.zip)** — unzip and run the `.exe`, no install needed.
+
+Prefer the terminal UI, or want an older version? See the [Releases page](https://github.com/mfiferna/bindproxy/releases).
 
 ## Build from source
 

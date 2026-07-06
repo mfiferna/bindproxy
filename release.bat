@@ -29,7 +29,9 @@ if errorlevel 1 goto :error
 del /q "%OUT%\tui\*.pdb" 2>nul
 
 echo == Packaging zips ==
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%OUT%\avalonia\*' -DestinationPath '%OUT%\bindproxy-%VERSION%-%RID%.zip' -Force"
+rem Avalonia zip has a stable, version-less name so releases/latest/download/ always
+rem resolves to the newest build; the version still lives in the release tag/title.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%OUT%\avalonia\*' -DestinationPath '%OUT%\bindproxy-%RID%.zip' -Force"
 if errorlevel 1 goto :error
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%OUT%\tui\*' -DestinationPath '%OUT%\bindproxy-tui-%VERSION%-%RID%.zip' -Force"
 if errorlevel 1 goto :error
