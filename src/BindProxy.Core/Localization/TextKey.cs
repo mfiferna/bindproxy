@@ -65,4 +65,11 @@ public enum TextKey
     DnsCustomSuffix,
     DnsSystemDefault,
     DnsUnavailable,
+    ThroughputRateLine,
+    ThroughputTotalLine,
+    ConnectionsTab,
+    LogTab,
+    LogEmptyState,
+    ClearLog,
+    LogEntryLine,
 }

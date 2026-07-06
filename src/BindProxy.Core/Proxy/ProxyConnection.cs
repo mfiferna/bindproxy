@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,6 +22,8 @@ internal static class ProxyConnection
         TimeSpan connectTimeout,
         Action<string> onError,
         Action onSuccess,
+        Action<int> onBytesSent,
+        Action<int> onBytesReceived,
         CancellationToken ct)
     {
         DisableNagle(client.Client);
@@ -53,6 +56,15 @@ internal static class ProxyConnection
             return;
         }
 
+        if (remoteAddress.Equals(IPAddress.Any))
+        {
+            // Ad-blocking DNS servers commonly sinkhole blocked hosts to 0.0.0.0. Connecting there
+            // would always fail, and it isn't a proxy error worth reporting - it's the DNS block
+            // working as intended, so skip the connect attempt and don't call onError.
+            await WriteErrorAsync(clientStream, "502 Bad Gateway", $"{request.Host} resolved to 0.0.0.0 (blocked by DNS)", ct).ConfigureAwait(false);
+            return;
+        }
+
         using var server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         DisableNagle(server);
         try
@@ -78,7 +90,11 @@ internal static class ProxyConnection
         }
 
         onSuccess();
-        await using var serverStream = new NetworkStream(server, ownsSocket: false);
+        // ownsSocket: true so PumpAsync's teardown (disposing both streams to unblock whichever
+        // direction is still reading) actually closes this socket. With ownsSocket: false, disposing
+        // the stream wrapper leaves the underlying socket open, and a pending read against an origin
+        // that hasn't closed its own side first would block forever.
+        await using var serverStream = new NetworkStream(server, ownsSocket: true);
         if (request.Kind == ProxyRequestKind.Connect)
         {
             await clientStream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray(), ct).ConfigureAwait(false);
@@ -91,7 +107,7 @@ internal static class ProxyConnection
         {
             await serverStream.WriteAsync(leftover, ct).ConfigureAwait(false);
         }
-        await PumpAsync(clientStream, serverStream, ct).ConfigureAwait(false);
+        await PumpAsync(clientStream, serverStream, onBytesSent, onBytesReceived, ct).ConfigureAwait(false);
     }
 
     private static async Task<(ReadHeadStatus Status, string Head, byte[] Leftover)> ReadHeadAsync(NetworkStream stream, CancellationToken ct)
@@ -114,10 +130,12 @@ internal static class ProxyConnection
         }
     }
 
-    private static async Task PumpAsync(Stream a, Stream b, CancellationToken ct)
+    private const int PumpBufferSize = 81920; // matches Stream.CopyToAsync's default buffer size
+
+    private static async Task PumpAsync(Stream a, Stream b, Action<int> onAtoB, Action<int> onBtoA, CancellationToken ct)
     {
-        var ab = CopySilentlyAsync(a, b, ct);
-        var ba = CopySilentlyAsync(b, a, ct);
+        var ab = CopySilentlyAsync(a, b, onAtoB, ct);
+        var ba = CopySilentlyAsync(b, a, onBtoA, ct);
         await Task.WhenAny(ab, ba).ConfigureAwait(false);
         // Closing both streams unblocks whichever direction is still reading.
         a.Dispose();
@@ -125,10 +143,20 @@ internal static class ProxyConnection
         await Task.WhenAll(ab, ba).ConfigureAwait(false);
     }
 
-    private static async Task CopySilentlyAsync(Stream from, Stream to, CancellationToken ct)
+    private static async Task CopySilentlyAsync(Stream from, Stream to, Action<int> onBytesCopied, CancellationToken ct)
     {
-        try { await from.CopyToAsync(to, ct).ConfigureAwait(false); }
+        var buffer = ArrayPool<byte>.Shared.Rent(PumpBufferSize);
+        try
+        {
+            int read;
+            while ((read = await from.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+            {
+                await to.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                onBytesCopied(read);
+            }
+        }
         catch { /* disconnects and cancellation end the pump; nothing to report */ }
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
     }
 
     private static async Task WriteErrorAsync(NetworkStream stream, string status, string? reason, CancellationToken ct)

@@ -13,6 +13,9 @@ public sealed class SessionManager : IAsyncDisposable
     /// <summary>Raised when a session starts or stops.</summary>
     public event Action? SessionsChanged;
 
+    /// <summary>Connection errors across every session, for the runtime lifetime of this manager.</summary>
+    public ConnectionErrorLog ErrorLog { get; } = new();
+
     public IReadOnlyList<ProxySession> Sessions
     {
         get { lock (_lock) return _sessions.Values.ToArray(); }
@@ -29,7 +32,7 @@ public sealed class SessionManager : IAsyncDisposable
         lock (_lock)
         {
             if (_sessions.TryGetValue(nic.Id, out var existing)) return existing;
-            session = new ProxySession(nic, dnsOverride);
+            session = new ProxySession(nic, dnsOverride, ErrorLog);
             _sessions[nic.Id] = session;
         }
         SessionsChanged?.Invoke();

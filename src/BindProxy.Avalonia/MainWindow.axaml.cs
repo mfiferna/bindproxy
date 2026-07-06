@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using BindProxy.Core.Browsers;
+using BindProxy.Core.Formatting;
 using BindProxy.Core.Launch;
 using BindProxy.Core.Localization;
 using BindProxy.Core.Nics;
@@ -28,6 +29,10 @@ public partial class MainWindow : Window
     private readonly StackPanel _rowsPanel;
     private readonly TextBlock _languageLabel;
     private readonly ComboBox _languageComboBox;
+    private readonly TabItem _connectionsTabItem;
+    private readonly TabItem _logTabItem;
+    private readonly Button _clearLogButton;
+    private readonly StackPanel _logPanel;
     private IReadOnlyList<NicInfo> _currentNics = [];
     private IReadOnlyList<BrowserInfo> _currentBrowsers = [];
 
@@ -54,17 +59,28 @@ public partial class MainWindow : Window
         _rowsPanel = this.FindControl<StackPanel>("RowsPanel")!;
         _languageLabel = this.FindControl<TextBlock>("LanguageLabel")!;
         _languageComboBox = this.FindControl<ComboBox>("LanguageComboBox")!;
+        _connectionsTabItem = this.FindControl<TabItem>("ConnectionsTabItem")!;
+        _logTabItem = this.FindControl<TabItem>("LogTabItem")!;
+        _clearLogButton = this.FindControl<Button>("ClearLogButton")!;
+        _logPanel = this.FindControl<StackPanel>("LogPanel")!;
         var refreshButton = this.FindControl<Button>("RefreshButton")!;
         refreshButton.Click += (_, _) => Reload();
         _languageComboBox.ItemsSource = BuildLanguageOptions();
         _languageComboBox.SelectionChanged += (_, _) => OnLanguageChanged();
+        _clearLogButton.Click += (_, _) =>
+        {
+            _sessionManager.ErrorLog.Clear();
+            RefreshLog();
+        };
         ApplyLocalizedChrome();
 
         _sessionManager.SessionsChanged += OnSessionsChanged;
+        _sessionManager.ErrorLog.EntryAdded += OnErrorLogEntryAdded;
         Closed += (_, _) =>
 
         {
             _sessionManager.SessionsChanged -= OnSessionsChanged;
+            _sessionManager.ErrorLog.EntryAdded -= OnErrorLogEntryAdded;
             ClearSessionSubscriptions();
             if (_ownsSessionManager)
             {
@@ -73,6 +89,37 @@ public partial class MainWindow : Window
         };
 
         Reload();
+        RefreshLog();
+    }
+
+    private void OnErrorLogEntryAdded() => Dispatcher.UIThread.Post(RefreshLog);
+
+    private void RefreshLog()
+    {
+        _logPanel.Children.Clear();
+        var entries = _sessionManager.ErrorLog.Entries;
+        if (entries.Count == 0)
+        {
+            _logPanel.Children.Add(new TextBlock
+            {
+                Text = Localizer.Get(TextKey.LogEmptyState),
+                FontSize = 13,
+                Opacity = 0.7,
+            });
+            return;
+        }
+
+        for (int i = entries.Count - 1; i >= 0; i--)
+        {
+            var entry = entries[i];
+            _logPanel.Children.Add(new TextBlock
+            {
+                Text = Localizer.Format(TextKey.LogEntryLine, entry.TimestampUtc.ToLocalTime(), entry.NicName, entry.Message),
+                FontFamily = new FontFamily("Consolas,Menlo,monospace"),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
@@ -85,6 +132,9 @@ public partial class MainWindow : Window
         var refreshButton = this.FindControl<Button>("RefreshButton")!;
         refreshButton.Content = Localizer.Get(TextKey.Refresh);
         ToolTip.SetTip(refreshButton, Localizer.Get(TextKey.RefreshNicAndBrowserLists));
+        _connectionsTabItem.Header = Localizer.Get(TextKey.ConnectionsTab);
+        _logTabItem.Header = Localizer.Get(TextKey.LogTab);
+        _clearLogButton.Content = Localizer.Get(TextKey.ClearLog);
 
         var options = BuildLanguageOptions();
         _languageComboBox.ItemsSource = options;
@@ -106,6 +156,7 @@ public partial class MainWindow : Window
         Localizer.SetCulture(option.Culture);
         ApplyLocalizedChrome();
         RefreshRows();
+        RefreshLog();
     }
 
     private void Reload()
@@ -362,6 +413,30 @@ public partial class MainWindow : Window
         stack.Children.Add(new TextBlock
         {
             Text = $"{Localizer.Format(TextKey.ProxyAddressLine, session.ProxyUrl)} · {Localizer.Format(TextKey.ActiveBrowsersAndConnections, session.LaunchedProcessIds.Count, session.ActiveConnections)}",
+            FontFamily = new FontFamily("Consolas,Menlo,monospace"),
+            FontSize = 12,
+            Foreground = palette.MutedText,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var culture = Localizer.CurrentCulture;
+        stack.Children.Add(new TextBlock
+        {
+            Text = Localizer.Format(
+                TextKey.ThroughputRateLine,
+                ThroughputFormatter.FormatBitsPerSecond(session.ReceivedBytesPerSecond, culture),
+                ThroughputFormatter.FormatBitsPerSecond(session.SentBytesPerSecond, culture)),
+            FontFamily = new FontFamily("Consolas,Menlo,monospace"),
+            FontSize = 12,
+            Foreground = palette.MutedText,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = Localizer.Format(
+                TextKey.ThroughputTotalLine,
+                ThroughputFormatter.FormatBytes(session.TotalBytesReceived, culture),
+                ThroughputFormatter.FormatBytes(session.TotalBytesSent, culture)),
             FontFamily = new FontFamily("Consolas,Menlo,monospace"),
             FontSize = 12,
             Foreground = palette.MutedText,

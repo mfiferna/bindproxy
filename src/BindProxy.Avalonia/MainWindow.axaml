@@ -37,8 +37,24 @@
       </StackPanel>
     </Grid>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Name="RowsPanel" Spacing="14" />
-    </ScrollViewer>
+    <TabControl Name="MainTabControl">
+      <TabItem Name="ConnectionsTabItem">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Name="RowsPanel" Spacing="14" />
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Name="LogTabItem">
+        <DockPanel>
+          <Button Name="ClearLogButton"
+                  DockPanel.Dock="Top"
+                  HorizontalAlignment="Right"
+                  Margin="0,0,0,12"
+                  Padding="10,6" />
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Name="LogPanel" Spacing="6" />
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </Window>

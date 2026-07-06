@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using BindProxy.Core.Nics;
 using BindProxy.Core.Sessions;
 using Xunit;
@@ -97,5 +98,65 @@ public class SessionManagerTests
         await stream.WriteAsync("CONNECT nosuch.example:443 HTTP/1.1\r\n\r\n"u8.ToArray());
         await RawSocket.ReadHeadAsync(stream);
         Assert.NotNull(session.LastError);
+    }
+
+    [Fact]
+    public async Task Failed_connection_is_recorded_in_the_manager_error_log()
+    {
+        await using var manager = new SessionManager();
+        var session = manager.GetOrStart(LoopbackNic());
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, session.Port);
+        var stream = client.GetStream();
+        await stream.WriteAsync("CONNECT nosuch.example:443 HTTP/1.1\r\n\r\n"u8.ToArray());
+        await RawSocket.ReadHeadAsync(stream);
+
+        var entry = Assert.Single(manager.ErrorLog.Entries);
+        Assert.Equal("Test", entry.NicName);
+        Assert.Equal(session.LastError, entry.Message);
+    }
+
+    [Fact]
+    public async Task Session_exposes_bytes_transferred_through_its_proxy()
+    {
+        var echo = new TcpListener(IPAddress.Loopback, 0);
+        echo.Start();
+        int echoPort = ((IPEndPoint)echo.LocalEndpoint).Port;
+        _ = Task.Run(async () =>
+        {
+            using var c = await echo.AcceptTcpClientAsync();
+            var s = c.GetStream();
+            var buf = new byte[4096];
+            int read;
+            while ((read = await s.ReadAsync(buf)) > 0)
+            {
+                await s.WriteAsync(buf.AsMemory(0, read));
+            }
+        });
+
+        await using var manager = new SessionManager();
+        var session = manager.GetOrStart(LoopbackNic());
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, session.Port);
+        var stream = client.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{echoPort} HTTP/1.1\r\n\r\n"));
+        await RawSocket.ReadHeadAsync(stream);
+
+        var payload = new byte[5_000];
+        Random.Shared.NextBytes(payload);
+        await stream.WriteAsync(payload);
+        var received = new byte[5_000];
+        await stream.ReadExactlyAsync(received);
+        Assert.Equal(payload, received);
+
+        client.Dispose();
+        for (int i = 0; i < 100 && session.TotalBytesSent < 5_000; i++)
+        {
+            await Task.Delay(10);
+        }
+        echo.Stop();
+
+        Assert.Equal(5_000, session.TotalBytesSent);
+        Assert.Equal(5_000, session.TotalBytesReceived);
     }
 }

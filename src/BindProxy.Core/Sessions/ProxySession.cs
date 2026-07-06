@@ -19,6 +19,10 @@ public sealed class ProxySession : IAsyncDisposable
     public int Port => _server.Port;
     public string ProxyUrl => $"http://127.0.0.1:{Port}";
     public int ActiveConnections => _server.ActiveConnections;
+    public long TotalBytesSent => _server.TotalBytesSent;
+    public long TotalBytesReceived => _server.TotalBytesReceived;
+    public double SentBytesPerSecond => _server.SentBytesPerSecond;
+    public double ReceivedBytesPerSecond => _server.ReceivedBytesPerSecond;
 
     public IReadOnlyList<int> LaunchedProcessIds
     {
@@ -28,16 +32,18 @@ public sealed class ProxySession : IAsyncDisposable
     /// <summary>Raised on any observable change: connections, DNS, PIDs, errors.</summary>
     public event Action? Changed;
 
-    internal ProxySession(NicInfo nic, IPAddress? dnsOverride)
+    internal ProxySession(NicInfo nic, IPAddress? dnsOverride, ConnectionErrorLog errorLog)
     {
         Nic = nic;
         DnsOverride = dnsOverride;
         _resolver = new SwappableResolver(BuildResolver(nic, dnsOverride));
         _server = new ProxyServer(nic.Ipv4Address, _resolver);
         _server.ActiveConnectionsChanged += () => Changed?.Invoke();
+        _server.ThroughputChanged += () => Changed?.Invoke();
         _server.ConnectionError += message =>
         {
             LastError = message;
+            errorLog.Add(Nic.Name, message);
             Changed?.Invoke();
         };
         _server.ConnectionSucceeded += () =>

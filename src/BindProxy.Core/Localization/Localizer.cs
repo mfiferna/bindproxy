@@ -71,6 +71,13 @@ public static class Localizer
         [TextKey.DnsCustomSuffix] = "{0} (vlastní)",
         [TextKey.DnsSystemDefault] = "výchozí",
         [TextKey.DnsUnavailable] = "není k dispozici",
+        [TextKey.ThroughputRateLine] = "↓ {0} · ↑ {1}",
+        [TextKey.ThroughputTotalLine] = "↓ {0} · ↑ {1} celkem",
+        [TextKey.ConnectionsTab] = "Připojení",
+        [TextKey.LogTab] = "Log",
+        [TextKey.LogEmptyState] = "Zatím žádné chyby připojení.",
+        [TextKey.ClearLog] = "Vymazat",
+        [TextKey.LogEntryLine] = "{0:HH:mm:ss} · {1} · {2}",
     };
 
     private static readonly IReadOnlyDictionary<TextKey, string> English = new Dictionary<TextKey, string>
@@ -137,6 +144,13 @@ public static class Localizer
         [TextKey.DnsCustomSuffix] = "{0} (custom)",
         [TextKey.DnsSystemDefault] = "default",
         [TextKey.DnsUnavailable] = "unavailable",
+        [TextKey.ThroughputRateLine] = "↓ {0} · ↑ {1}",
+        [TextKey.ThroughputTotalLine] = "↓ {0} · ↑ {1} total",
+        [TextKey.ConnectionsTab] = "Connections",
+        [TextKey.LogTab] = "Log",
+        [TextKey.LogEmptyState] = "No connection errors yet.",
+        [TextKey.ClearLog] = "Clear",
+        [TextKey.LogEntryLine] = "{0:HH:mm:ss} · {1} · {2}",
     };
 
     public static CultureInfo CurrentCulture { get; private set; } = NormalizeCulture(CultureInfo.CurrentUICulture);

@@ -8,9 +8,9 @@ namespace BindProxy.Core.Tests;
 
 public class ProxyServerTests
 {
-    private static ProxyServer StartProxy(Func<string, IPAddress>? resolve = null, TimeSpan? connectTimeout = null)
+    private static ProxyServer StartProxy(Func<string, IPAddress>? resolve = null, TimeSpan? connectTimeout = null, TimeSpan? throughputSampleInterval = null)
     {
-        var proxy = new ProxyServer(IPAddress.Loopback, new StubResolver(resolve ?? IPAddress.Parse), connectTimeout);
+        var proxy = new ProxyServer(IPAddress.Loopback, new StubResolver(resolve ?? IPAddress.Parse), connectTimeout, throughputSampleInterval);
         proxy.Start();
         return proxy;
     }
@@ -138,6 +138,26 @@ public class ProxyServerTests
         Assert.StartsWith("HTTP/1.1 502", response);
         Assert.NotNull(reportedError);
         Assert.Contains("dns down", reportedError);
+    }
+
+    [Fact]
+    public async Task Dns_sinkholed_to_zero_address_returns_502_without_raising_error_event()
+    {
+        // Ad-blocking DNS servers commonly resolve blocked hosts to 0.0.0.0. Connecting there
+        // would always fail (it's not a real destination), and it isn't a proxy error worth
+        // reporting - it's the DNS block working as intended.
+        await using var proxy = StartProxy(_ => IPAddress.Any);
+        string? reportedError = null;
+        proxy.ConnectionError += msg => reportedError = msg;
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
+        var stream = client.GetStream();
+        await stream.WriteAsync("CONNECT ad.doubleclick.net:443 HTTP/1.1\r\n\r\n"u8.ToArray());
+        var response = await RawSocket.ReadHeadAsync(stream);
+
+        Assert.StartsWith("HTTP/1.1 502", response);
+        Assert.Null(reportedError);
     }
 
     [Fact]
@@ -287,7 +307,7 @@ public class ProxyServerTests
 
         var runTask = ProxyConnection.RunAsync(
             accepted, IPAddress.Loopback, new StubResolver(IPAddress.Parse),
-            TimeSpan.FromSeconds(5), _ => { }, () => { }, CancellationToken.None);
+            TimeSpan.FromSeconds(5), _ => { }, () => { }, _ => { }, _ => { }, CancellationToken.None);
 
         var dialerStream = dialer.GetStream();
         await dialerStream.WriteAsync(Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{echoPort} HTTP/1.1\r\n\r\n"));
@@ -299,5 +319,117 @@ public class ProxyServerTests
         dialer.Dispose();
         await runTask;
         echo.Stop();
+    }
+
+    [Fact]
+    public async Task Connect_tunnel_reports_bytes_transferred_in_each_direction()
+    {
+        var frontend = new TcpListener(IPAddress.Loopback, 0);
+        frontend.Start();
+        var acceptTask = frontend.AcceptTcpClientAsync();
+        using var dialer = new TcpClient();
+        await dialer.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)frontend.LocalEndpoint).Port);
+        using var accepted = await acceptTask;
+        frontend.Stop();
+
+        // Echo origin: reflects back exactly what it reads, so client->origin and origin->client
+        // byte counts are both known and equal to the payload size.
+        var echo = new TcpListener(IPAddress.Loopback, 0);
+        echo.Start();
+        int echoPort = ((IPEndPoint)echo.LocalEndpoint).Port;
+        _ = Task.Run(async () =>
+        {
+            using var c = await echo.AcceptTcpClientAsync();
+            var s = c.GetStream();
+            var buf = new byte[4096];
+            int read;
+            while ((read = await s.ReadAsync(buf)) > 0)
+            {
+                await s.WriteAsync(buf.AsMemory(0, read));
+            }
+        });
+
+        long bytesSent = 0, bytesReceived = 0;
+        var runTask = ProxyConnection.RunAsync(
+            accepted, IPAddress.Loopback, new StubResolver(IPAddress.Parse), TimeSpan.FromSeconds(5),
+            _ => { }, () => { },
+            n => Interlocked.Add(ref bytesSent, n),
+            n => Interlocked.Add(ref bytesReceived, n),
+            CancellationToken.None);
+
+        var dialerStream = dialer.GetStream();
+        await dialerStream.WriteAsync(Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{echoPort} HTTP/1.1\r\n\r\n"));
+        await RawSocket.ReadHeadAsync(dialerStream);
+
+        var payload = new byte[10_000];
+        Random.Shared.NextBytes(payload);
+        await dialerStream.WriteAsync(payload);
+
+        var received = new byte[10_000];
+        await dialerStream.ReadExactlyAsync(received);
+        Assert.Equal(payload, received);
+
+        dialer.Dispose();
+        await runTask;
+        echo.Stop();
+
+        Assert.Equal(10_000, Interlocked.Read(ref bytesSent));
+        Assert.Equal(10_000, Interlocked.Read(ref bytesReceived));
+    }
+
+    [Fact]
+    public async Task Server_totals_reflect_bytes_transferred_through_a_tunnel()
+    {
+        var echo = new TcpListener(IPAddress.Loopback, 0);
+        echo.Start();
+        int echoPort = ((IPEndPoint)echo.LocalEndpoint).Port;
+        _ = Task.Run(async () =>
+        {
+            using var c = await echo.AcceptTcpClientAsync();
+            var s = c.GetStream();
+            var buf = new byte[4096];
+            int read;
+            while ((read = await s.ReadAsync(buf)) > 0)
+            {
+                await s.WriteAsync(buf.AsMemory(0, read));
+            }
+        });
+
+        await using var proxy = StartProxy();
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
+        var stream = client.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{echoPort} HTTP/1.1\r\n\r\n"));
+        await RawSocket.ReadHeadAsync(stream);
+
+        var payload = new byte[10_000];
+        Random.Shared.NextBytes(payload);
+        await stream.WriteAsync(payload);
+
+        var received = new byte[10_000];
+        await stream.ReadExactlyAsync(received);
+        Assert.Equal(payload, received);
+
+        client.Dispose();
+        // Give the pump loop's teardown a moment to run and report the final bytes.
+        for (int i = 0; i < 100 && proxy.TotalBytesSent < 10_000; i++)
+        {
+            await Task.Delay(10);
+        }
+        echo.Stop();
+
+        Assert.Equal(10_000, proxy.TotalBytesSent);
+        Assert.Equal(10_000, proxy.TotalBytesReceived);
+    }
+
+    [Fact]
+    public async Task ThroughputChanged_fires_periodically_while_running()
+    {
+        await using var proxy = StartProxy(throughputSampleInterval: TimeSpan.FromMilliseconds(20));
+        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.ThroughputChanged += () => fired.TrySetResult();
+
+        var completed = await Task.WhenAny(fired.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(fired.Task, completed);
     }
 }

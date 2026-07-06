@@ -8,27 +8,45 @@ namespace BindProxy.Core.Proxy;
 /// An HTTP forward proxy on 127.0.0.1 whose outbound connections are bound to one NIC's address.
 /// One instance per session/NIC.
 /// </summary>
-public sealed class ProxyServer(IPAddress outboundAddress, IDnsResolver resolver, TimeSpan? connectTimeout = null) : IAsyncDisposable
+public sealed class ProxyServer(IPAddress outboundAddress, IDnsResolver resolver, TimeSpan? connectTimeout = null, TimeSpan? throughputSampleInterval = null) : IAsyncDisposable
 {
+    private static readonly TimeSpan ThroughputWindow = TimeSpan.FromSeconds(5);
+
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource _cts = new();
+    private readonly ThroughputMeter _throughput = new(ThroughputWindow);
+    private readonly TimeSpan _sampleInterval = throughputSampleInterval ?? TimeSpan.FromSeconds(1);
     private Task? _acceptLoop;
+    private Timer? _throughputTimer;
     private int _activeConnections;
     private readonly TimeSpan _connectTimeout = connectTimeout ?? TimeSpan.FromSeconds(10);
 
     public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
     public int ActiveConnections => Volatile.Read(ref _activeConnections);
+    public long TotalBytesSent => _throughput.TotalBytesSent;
+    public long TotalBytesReceived => _throughput.TotalBytesReceived;
+    public double SentBytesPerSecond => _throughput.SentBytesPerSecond;
+    public double ReceivedBytesPerSecond => _throughput.ReceivedBytesPerSecond;
 
     public event Action? ActiveConnectionsChanged;
     /// <summary>Raised with a short message when a connection fails before its tunnel is established.</summary>
     public event Action<string>? ConnectionError;
     /// <summary>Raised when an outbound connection is established (used to clear error states).</summary>
     public event Action? ConnectionSucceeded;
+    /// <summary>Raised roughly every <see cref="_sampleInterval"/> while running, after the rolling rate is resampled.</summary>
+    public event Action? ThroughputChanged;
 
     public void Start()
     {
         _listener.Start();
         _acceptLoop = AcceptLoopAsync();
+        _throughputTimer = new Timer(SampleThroughput, null, _sampleInterval, _sampleInterval);
+    }
+
+    private void SampleThroughput(object? state)
+    {
+        _throughput.Tick();
+        ThroughputChanged?.Invoke();
     }
 
     private async Task AcceptLoopAsync()
@@ -55,6 +73,8 @@ public sealed class ProxyServer(IPAddress outboundAddress, IDnsResolver resolver
                 client, outboundAddress, resolver, _connectTimeout,
                 msg => ConnectionError?.Invoke(msg),
                 () => ConnectionSucceeded?.Invoke(),
+                _throughput.AddSent,
+                _throughput.AddReceived,
                 _cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -76,6 +96,10 @@ public sealed class ProxyServer(IPAddress outboundAddress, IDnsResolver resolver
         if (_acceptLoop is not null)
         {
             try { await _acceptLoop.ConfigureAwait(false); } catch { }
+        }
+        if (_throughputTimer is not null)
+        {
+            await _throughputTimer.DisposeAsync().ConfigureAwait(false);
         }
         _cts.Dispose();
     }
