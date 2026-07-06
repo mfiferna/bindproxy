@@ -1,5 +1,6 @@
 using System.Net;
 using BindProxy.Core.Browsers;
+using BindProxy.Core.Localization;
 using BindProxy.Core.Nics;
 using BindProxy.Core.Sessions;
 using Terminal.Gui.ViewBase;
@@ -19,6 +20,7 @@ internal sealed class NicRowView : FrameView
         NicInfo nic,
         IReadOnlyList<BrowserInfo> browsers,
         Func<BrowserInfo, Task> launchBrowserAsync,
+        Func<BrowserInfo, Task> launchBrowserWithDefaultProfileAsync,
         Func<Task> startManualAsync,
         Func<Task> editDnsAsync,
         Func<Task> stopAsync,
@@ -34,13 +36,13 @@ internal sealed class NicRowView : FrameView
             X = 0,
             Y = 0,
             Width = Dim.Percent(56),
-            Height = 3,
+            Height = 4,
         };
 
         _statusLabel = new Label
         {
             X = 0,
-            Y = 3,
+            Y = 4,
             Width = Dim.Fill(),
             Height = 1,
         };
@@ -57,17 +59,27 @@ internal sealed class NicRowView : FrameView
             previous = button;
         }
 
-        var manualButton = CreateButton("Manual", startManualAsync);
+        previous = null;
+        foreach (var browser in browsers)
+        {
+            var button = CreateButton(Localizer.Format(TextKey.DefaultProfileButton, browser.Name), async () => await launchBrowserWithDefaultProfileAsync(browser).ConfigureAwait(false));
+            button.X = previous is null ? Pos.Percent(58) : Pos.Right(previous) + 1;
+            button.Y = 1;
+            Add(button);
+            previous = button;
+        }
+
+        var manualButton = CreateButton(Localizer.Get(TextKey.Manual), startManualAsync);
         manualButton.X = Pos.Percent(58);
-        manualButton.Y = 2;
+        manualButton.Y = 3;
 
-        var dnsButton = CreateButton("DNS", editDnsAsync);
+        var dnsButton = CreateButton(Localizer.Get(TextKey.Dns), editDnsAsync);
         dnsButton.X = Pos.Right(manualButton) + 1;
-        dnsButton.Y = 2;
+        dnsButton.Y = 3;
 
-        _stopButton = CreateButton("Stop", stopAsync);
+        _stopButton = CreateButton(Localizer.Get(TextKey.Stop), stopAsync);
         _stopButton.X = Pos.Right(dnsButton) + 1;
-        _stopButton.Y = 2;
+        _stopButton.Y = 3;
 
         Add(manualButton, dnsButton, _stopButton);
 
@@ -75,11 +87,11 @@ internal sealed class NicRowView : FrameView
         {
             var noBrowsersLabel = new Label
             {
-                Text = "No Chromium browsers found",
+                Text = Localizer.Get(TextKey.NoChromiumFound),
                 X = Pos.Percent(58),
                 Y = 0,
                 Width = Dim.Fill(),
-                Height = 1,
+                Height = 2,
             };
             Add(noBrowsersLabel);
         }
@@ -93,7 +105,8 @@ internal sealed class NicRowView : FrameView
         _infoLabel.Text =
             $"{_nic.Ipv4Address}\n" +
             $"{_nic.Description}\n" +
-            $"DNS: {FormatDns(dnsOverride, _nic.DnsServers)}";
+            $"{Localizer.Format(TextKey.DnsLabel, FormatDns(dnsOverride, _nic.DnsServers))}\n" +
+            Localizer.Get(TextKey.NicRowInstruction);
 
         _statusLabel.Text = FormatStatus(session, dnsOverride);
         _stopButton.Enabled = session is not null;
@@ -110,29 +123,29 @@ internal sealed class NicRowView : FrameView
     {
         if (dnsOverride is not null)
         {
-            return $"{dnsOverride} (override)";
+            return Localizer.Format(TextKey.DnsOverrideSuffix, dnsOverride);
         }
 
-        return defaults.Count == 0 ? "system default unavailable" : string.Join(", ", defaults);
+        return defaults.Count == 0 ? Localizer.Get(TextKey.SystemDefaultUnavailable) : string.Join(", ", defaults);
     }
 
     private static string FormatStatus(ProxySession? session, IPAddress? pendingDns)
     {
         if (session is null)
         {
-            return pendingDns is null ? "stopped" : $"stopped · pending DNS {pendingDns}";
+            return pendingDns is null ? Localizer.Get(TextKey.Stopped) : Localizer.Format(TextKey.PendingDns, pendingDns);
         }
 
         var parts = new List<string>
         {
-            $"proxy {session.ProxyUrl}",
-            $"{session.LaunchedProcessIds.Count} browsers",
-            $"{session.ActiveConnections} conns",
+            Localizer.Format(TextKey.ProxyStatus, session.ProxyUrl),
+            Localizer.Format(TextKey.BrowsersCount, session.LaunchedProcessIds.Count),
+            Localizer.Format(TextKey.ConnectionsCount, session.ActiveConnections),
         };
 
         if (!string.IsNullOrWhiteSpace(session.LastError))
         {
-            parts.Add($"error: {session.LastError}");
+            parts.Add(Localizer.Format(TextKey.ErrorStatus, session.LastError));
         }
 
         return string.Join(" · ", parts);

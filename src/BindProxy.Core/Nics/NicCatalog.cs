@@ -25,8 +25,19 @@ public static class NicCatalog
                 .Select(g => g.Address)
                 .Any(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.Any.Equals(a));
             if (!hasIpv4Gateway) continue;
-            result.Add(new NicInfo(nic.Id, nic.Name, nic.Description, ipv4, dns));
+            result.Add(new NicInfo(nic.Id, nic.Name, nic.Description, ipv4, dns, ClassifyKind(nic.NetworkInterfaceType)));
         }
         return result.OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
+
+    private static NicKind ClassifyKind(NetworkInterfaceType type) => type switch
+    {
+        NetworkInterfaceType.Wireless80211 => NicKind.Wireless,
+        NetworkInterfaceType.Ethernet
+            or NetworkInterfaceType.Ethernet3Megabit
+            or NetworkInterfaceType.FastEthernetT
+            or NetworkInterfaceType.FastEthernetFx
+            or NetworkInterfaceType.GigabitEthernet => NicKind.Ethernet,
+        _ => NicKind.Other,
+    };
 }

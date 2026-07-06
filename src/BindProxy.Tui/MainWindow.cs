@@ -1,6 +1,7 @@
 using System.Net;
 using BindProxy.Core.Browsers;
 using BindProxy.Core.Launch;
+using BindProxy.Core.Localization;
 using BindProxy.Core.Nics;
 using BindProxy.Core.Sessions;
 using Terminal.Gui.Drivers;
@@ -28,7 +29,7 @@ internal sealed class MainWindow : Window
         _browserCatalog = browserCatalog;
         _sessionManager = sessionManager;
 
-        Title = "BindProxy";
+        Title = Localizer.Get(TextKey.AppTitle);
         X = 0;
         Y = 0;
         Width = Dim.Fill();
@@ -52,8 +53,8 @@ internal sealed class MainWindow : Window
 
         var statusBar = new StatusBar(
         [
-            new Shortcut(new Key(KeyCode.CtrlMask | KeyCode.Q), "Quit", () => _app.RequestStop(this), "Exit BindProxy"),
-            new Shortcut(new Key(KeyCode.F5), "Refresh", Reload, "Refresh NIC and browser lists"),
+            new Shortcut(new Key(KeyCode.CtrlMask | KeyCode.Q), Localizer.Get(TextKey.Quit), () => _app.RequestStop(this), Localizer.Get(TextKey.ExitBindProxy)),
+            new Shortcut(new Key(KeyCode.F5), Localizer.Get(TextKey.Refresh), Reload, Localizer.Get(TextKey.RefreshNicAndBrowserLists)),
         ])
         {
             X = 0,
@@ -101,6 +102,7 @@ internal sealed class MainWindow : Window
                 nic,
                 browsers,
                 launchBrowserAsync: browser => LaunchBrowserAsync(nic, browser),
+                launchBrowserWithDefaultProfileAsync: browser => LaunchBrowserAsync(nic, browser, ProfileMode.UserDefault),
                 startManualAsync: () => StartManualAsync(nic),
                 editDnsAsync: () => EditDnsAsync(nic),
                 stopAsync: () => StopAsync(nic),
@@ -109,11 +111,11 @@ internal sealed class MainWindow : Window
             row.X = 0;
             row.Y = rowY;
             row.Width = Dim.Fill();
-            row.Height = 6;
+            row.Height = 7;
 
             _rowsHost.Add(row);
             _rowsByNicId.Add(nic.Id, row);
-            rowY += 6;
+            rowY += 7;
         }
     }
 
@@ -121,15 +123,15 @@ internal sealed class MainWindow : Window
     {
         if (nicCount == 0)
         {
-            return "No usable IPv4 NICs detected.";
+            return Localizer.Get(TextKey.NoUsableNicsDetected);
         }
 
         if (browserCount == 0)
         {
-            return "No Chromium browsers detected. Manual proxy start is still available.";
+            return Localizer.Get(TextKey.NoChromiumDetectedManualAvailable);
         }
 
-        return "Choose a NIC row, then launch a browser or start the proxy manually.";
+        return Localizer.Get(TextKey.MainInstruction);
     }
 
     private void OnSessionsChanged() => _app.Invoke(() =>
@@ -185,19 +187,19 @@ internal sealed class MainWindow : Window
         }
     }
 
-    private async Task LaunchBrowserAsync(NicInfo nic, BrowserInfo browser)
+    private async Task LaunchBrowserAsync(NicInfo nic, BrowserInfo browser, ProfileMode profileMode = ProfileMode.Isolated)
     {
         try
         {
             var session = _sessionManager.GetOrStart(nic, GetDnsOverride(nic.Id));
             SyncSessionSubscriptions();
-            int pid = BrowserLauncher.Launch(browser, session.Port, nic.Id);
+            int pid = BrowserLauncher.Launch(browser, session.Port, nic.Id, profileMode);
             session.AddLaunchedProcess(pid);
             RefreshRow(nic.Id);
         }
         catch (Exception ex)
         {
-            ShowError("Launch failed", ex.Message);
+            ShowError(Localizer.Get(TextKey.LaunchFailedTitle), ex.Message);
         }
 
         await Task.CompletedTask;
@@ -213,7 +215,7 @@ internal sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowError("Failed to start proxy", ex.Message);
+            ShowError(Localizer.Get(TextKey.StartProxyFailedTitle), ex.Message);
         }
 
         await Task.CompletedTask;
@@ -228,7 +230,7 @@ internal sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _app.Invoke(() => ShowError("Failed to stop proxy", ex.Message));
+            _app.Invoke(() => ShowError(Localizer.Get(TextKey.StopProxyFailedTitle), ex.Message));
         }
     }
 
@@ -262,5 +264,5 @@ internal sealed class MainWindow : Window
         => _dnsOverrides.TryGetValue(nicId, out var dns) ? dns : null;
 
     private void ShowError(string title, string message)
-        => MessageBox.ErrorQuery(_app, title, message, "OK");
+        => MessageBox.ErrorQuery(_app, title, message, Localizer.Get(TextKey.Ok));
 }

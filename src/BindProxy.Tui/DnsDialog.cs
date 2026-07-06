@@ -1,4 +1,5 @@
 using System.Net;
+using BindProxy.Core.Localization;
 using BindProxy.Core.Nics;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -12,10 +13,10 @@ internal static class DnsDialog
     {
         while (true)
         {
-            var dialog = new Dialog { Title = $"DNS Override - {nic.Name}" };
+            var dialog = new Dialog { Title = Localizer.Format(TextKey.DnsDialogTitle, nic.Name) };
             var prompt = new Label
             {
-                Text = "Leave blank to use the NIC default DNS server.",
+                Text = Localizer.Get(TextKey.DnsDialogPrompt),
                 X = 0,
                 Y = 0,
                 Width = Dim.Fill(),
@@ -31,8 +32,8 @@ internal static class DnsDialog
             };
 
             dialog.Add(prompt, valueField);
-            dialog.AddButton(new Button { Title = "Cancel" });
-            dialog.AddButton(new Button { Title = "Apply" });
+            dialog.AddButton(new Button { Title = Localizer.Get(TextKey.Cancel) });
+            dialog.AddButton(new Button { Title = Localizer.Get(TextKey.Apply) });
 
             app.Run(dialog);
 
@@ -52,7 +53,7 @@ internal static class DnsDialog
                 return new DnsDialogResult(true, address);
             }
 
-            MessageBox.ErrorQuery(app, "Invalid DNS address", $"'{text}' is not a valid IP address.", "OK");
+            MessageBox.ErrorQuery(app, Localizer.Get(TextKey.InvalidDnsTitle), Localizer.Format(TextKey.InvalidDnsMessage, text), Localizer.Get(TextKey.Ok));
         }
     }
 }

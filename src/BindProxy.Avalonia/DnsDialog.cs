@@ -1,6 +1,8 @@
 using System.Net;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using BindProxy.Core.Localization;
 using BindProxy.Core.Nics;
 
 namespace BindProxy.Avalonia;
@@ -13,7 +15,7 @@ internal sealed class DnsDialog : Window
 
     private DnsDialog(NicInfo nic, IPAddress? current)
     {
-        Title = $"DNS Override - {nic.Name}";
+        Title = Localizer.Format(TextKey.DnsDialogTitle, nic.Name);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         SizeToContent = SizeToContent.WidthAndHeight;
@@ -27,14 +29,14 @@ internal sealed class DnsDialog : Window
 
         var applyButton = new Button
         {
-            Content = "Apply",
+            Content = Localizer.Get(TextKey.Apply),
             MinWidth = 80,
         };
         applyButton.Click += (_, _) => Apply();
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = Localizer.Get(TextKey.Cancel),
             MinWidth = 80,
         };
         cancelButton.Click += (_, _) => Close();
@@ -45,7 +47,7 @@ internal sealed class DnsDialog : Window
             Spacing = 12,
             Children =
             {
-                new TextBlock { Text = "Leave blank to use the NIC default DNS server." },
+                new TextBlock { Text = Localizer.Get(TextKey.DnsDialogPrompt) },
                 _input,
                 _errorText,
                 new StackPanel
@@ -83,7 +85,7 @@ internal sealed class DnsDialog : Window
             return;
         }
 
-        _errorText.Text = $"'{text}' is not a valid IP address.";
+        _errorText.Text = Localizer.Format(TextKey.InvalidDnsMessage, text);
     }
 }
 

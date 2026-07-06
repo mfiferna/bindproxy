@@ -36,4 +36,11 @@ public class BrowserLauncherTests
         Assert.Matches("^[A-Za-z0-9._-]+$", leaf);
         Assert.Contains("Google_Chrome", leaf);
     }
+
+    [Fact]
+    public void Does_not_throw_for_isolated_profile_mode()
+    {
+        var browser = new BindProxy.Core.Browsers.BrowserInfo("Chrome", @"C:\Program Files\Chrome\chrome.exe");
+        BrowserLauncher.EnsureLaunchAllowed(browser, ProfileMode.Isolated);
+    }
 }

@@ -2,6 +2,14 @@ using System.Net;
 
 namespace BindProxy.Core.Nics;
 
+/// <summary>Broad category of a network interface, used purely to pick a friendly label/icon in the UI.</summary>
+public enum NicKind
+{
+    Ethernet,
+    Wireless,
+    Other,
+}
+
 /// <summary>
 /// A network interface suitable for default proxy use: up, non-loopback, with an IPv4 address and
 /// an IPv4 gateway so outbound internet-bound traffic can actually route through it.
@@ -11,4 +19,5 @@ public sealed record NicInfo(
     string Name,
     string Description,
     IPAddress Ipv4Address,
-    IReadOnlyList<IPAddress> DnsServers);
+    IReadOnlyList<IPAddress> DnsServers,
+    NicKind Kind = NicKind.Other);

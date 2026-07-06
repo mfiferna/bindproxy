@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
+using BindProxy.Core.Localization;
 
 namespace BindProxy.Avalonia;
 
@@ -14,7 +17,7 @@ internal sealed class MessageDialog : Window
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = Localizer.Get(TextKey.Ok),
             MinWidth = 80,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
@@ -30,7 +33,7 @@ internal sealed class MessageDialog : Window
                 {
                     Text = message,
                     Width = 420,
-                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    TextWrapping = TextWrapping.Wrap,
                 },
                 okButton,
             },

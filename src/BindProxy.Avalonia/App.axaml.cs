@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using BindProxy.Core.Browsers;
@@ -5,7 +6,7 @@ using BindProxy.Core.Sessions;
 
 namespace BindProxy.Avalonia;
 
-public partial class App : Avalonia.Application
+public partial class App : Application
 {
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
