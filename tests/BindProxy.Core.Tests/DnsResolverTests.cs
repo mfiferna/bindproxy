@@ -87,4 +87,28 @@ public class DnsResolverTests
         await Assert.ThrowsAsync<DnsResolutionException>(
             () => resolver.ResolveAsync("example.com", CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Ignores_forged_response_from_a_different_source_and_times_out()
+    {
+        // "silent" stands in for the configured DNS server: it receives the query but never
+        // replies. "attacker" is a distinct socket (different local port) that races in a
+        // well-formed, correctly-keyed response as soon as it sees the query go out - simulating
+        // an off-path spoofer that guessed the query's transaction id and the resolver's ephemeral
+        // port. A resolver that doesn't verify the reply's source would accept this.
+        using var silent = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var silentEndPoint = (IPEndPoint)silent.Client.LocalEndPoint!;
+        using var attacker = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+
+        _ = Task.Run(async () =>
+        {
+            var request = await silent.ReceiveAsync();
+            var forged = DnsTestData.BuildResponse(request.Buffer, IPAddress.Parse("6.6.6.6"), 60);
+            await attacker.SendAsync(forged, request.RemoteEndPoint);
+        });
+
+        var resolver = new DnsResolver(IPAddress.Loopback, [silentEndPoint], FastTimeout);
+        await Assert.ThrowsAsync<DnsResolutionException>(
+            () => resolver.ResolveAsync("example.com", CancellationToken.None));
+    }
 }

@@ -50,7 +50,11 @@ public sealed class DnsResolver(IPAddress localAddress, IReadOnlyList<IPEndPoint
         var id = (ushort)Random.Shared.Next(ushort.MaxValue + 1);
         var query = DnsMessage.BuildQuery(id, host);
         using var udp = new UdpClient(new IPEndPoint(localAddress, 0));
-        await udp.SendAsync(query, server, ct).ConfigureAwait(false);
+        // Connecting the socket makes the OS drop any datagram not from `server`, so a spoofed
+        // reply from another source (guessing the transaction id and our ephemeral port) is
+        // never delivered to ReceiveAsync.
+        udp.Connect(server);
+        await udp.SendAsync(query, ct).ConfigureAwait(false);
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_timeout);
         var result = await udp.ReceiveAsync(timeoutCts.Token).ConfigureAwait(false);

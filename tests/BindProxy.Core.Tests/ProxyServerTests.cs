@@ -257,4 +257,47 @@ public class ProxyServerTests
         using var client = new TcpClient();
         await Assert.ThrowsAnyAsync<SocketException>(() => client.ConnectAsync(IPAddress.Loopback, port));
     }
+
+    [Fact]
+    public void DisableNagle_sets_no_delay_on_a_real_socket()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        Assert.False(socket.NoDelay);
+        ProxyConnection.DisableNagle(socket);
+        Assert.True(socket.NoDelay);
+    }
+
+    [Fact]
+    public async Task Connect_tunnel_disables_nagle_on_the_accepted_client_socket()
+    {
+        // Stand-in for ProxyServer's listener, so we hold the actual TcpClient object
+        // ProxyConnection.RunAsync operates on and can inspect its socket options afterward.
+        var frontend = new TcpListener(IPAddress.Loopback, 0);
+        frontend.Start();
+        var acceptTask = frontend.AcceptTcpClientAsync();
+        using var dialer = new TcpClient();
+        await dialer.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)frontend.LocalEndpoint).Port);
+        using var accepted = await acceptTask;
+        frontend.Stop();
+
+        var echo = new TcpListener(IPAddress.Loopback, 0);
+        echo.Start();
+        int echoPort = ((IPEndPoint)echo.LocalEndpoint).Port;
+        _ = Task.Run(async () => { using var c = await echo.AcceptTcpClientAsync(); });
+
+        var runTask = ProxyConnection.RunAsync(
+            accepted, IPAddress.Loopback, new StubResolver(IPAddress.Parse),
+            TimeSpan.FromSeconds(5), _ => { }, () => { }, CancellationToken.None);
+
+        var dialerStream = dialer.GetStream();
+        await dialerStream.WriteAsync(Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{echoPort} HTTP/1.1\r\n\r\n"));
+        var response = await RawSocket.ReadHeadAsync(dialerStream);
+        Assert.StartsWith("HTTP/1.1 200", response);
+
+        Assert.True(accepted.Client.NoDelay);
+
+        dialer.Dispose();
+        await runTask;
+        echo.Stop();
+    }
 }

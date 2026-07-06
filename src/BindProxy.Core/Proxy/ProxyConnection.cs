@@ -11,6 +11,9 @@ internal static class ProxyConnection
     private const int MaxHeadBytes = 32 * 1024;
     private enum ReadHeadStatus { Completed, ClientClosed, TooLarge }
 
+    /// <summary>Disables Nagle's algorithm so small proxied writes aren't delayed waiting for a batch.</summary>
+    internal static void DisableNagle(Socket socket) => socket.NoDelay = true;
+
     public static async Task RunAsync(
         TcpClient client,
         IPAddress outboundAddress,
@@ -20,6 +23,7 @@ internal static class ProxyConnection
         Action onSuccess,
         CancellationToken ct)
     {
+        DisableNagle(client.Client);
         var clientStream = client.GetStream();
         var (status, head, leftover) = await ReadHeadAsync(clientStream, ct).ConfigureAwait(false);
         if (status == ReadHeadStatus.ClientClosed) return;
@@ -50,6 +54,7 @@ internal static class ProxyConnection
         }
 
         using var server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        DisableNagle(server);
         try
         {
             // The bind below is the entire point of this app: it pins the outbound
