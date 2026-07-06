@@ -50,7 +50,7 @@ public static class Localizer
         [TextKey.BrowserAlreadyRunning] = "{0} už běží. Nejdřív zavřete všechna jeho okna – jinak si nemusí nastavení proxy všimnout.",
         [TextKey.FailedToStartBrowser] = "{0} se nepodařilo spustit",
 
-        [TextKey.AppSubtitle] = "Vyberte připojení a otevřete na něm prohlížeč.",
+        [TextKey.AppSubtitle] = "Vyberte připojení a spusťte přes něj prohlížeč.",
         [TextKey.NicKindEthernet] = "Kabelové připojení",
         [TextKey.NicKindWireless] = "Wi-Fi",
         [TextKey.NicKindOtherConnection] = "Jiné připojení",
@@ -116,7 +116,7 @@ public static class Localizer
         [TextKey.BrowserAlreadyRunning] = "{0} is already running. Close all its windows first, or it won't pick up the proxy settings.",
         [TextKey.FailedToStartBrowser] = "Couldn't start {0}",
 
-        [TextKey.AppSubtitle] = "Choose a connection, then open a browser on it.",
+        [TextKey.AppSubtitle] = "Pick a connection and launch a browser through it.",
         [TextKey.NicKindEthernet] = "Wired connection",
         [TextKey.NicKindWireless] = "Wi-Fi",
         [TextKey.NicKindOtherConnection] = "Other connection",
